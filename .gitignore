@@ -1,2 +1,4 @@
 env/
-models/*
+models
+**/images/*
+Camera_Calibration/cam*/image*
