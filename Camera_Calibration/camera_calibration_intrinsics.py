@@ -7,8 +7,8 @@ import sys
 
 ################ FIND CHESSBOARD CORNERS - OBJECT POINTS AND IMAGE POINTS #############################
 
-chessboardSize = (10,7)
-frameSize = (640,480)
+chessboardSize = (10,7) # (number of inner corners per a chessboard row and column)
+frameSize = (640,480) # (640,480) # size of the images used for calibration
 
 
 
@@ -24,15 +24,16 @@ print(objp)
 
 # sys.exit()
 size_of_chessboard_squares_mm = 25
-objp = objp * size_of_chessboard_squares_mm
+objp = objp * size_of_chessboard_squares_mm # coordinates in mm
 
+print(objp)
 
 # Arrays to store object points and image points from all the images.
 objpoints = [] # 3d point in real world space
 imgpoints = [] # 2d points in image plane.
 
 
-images = glob.glob('Camera_Calibration/cam3/images/*.png')
+images = glob.glob('Camera_Calibration/cam1/images/*.png')
 
 for image in images:
 
@@ -96,7 +97,7 @@ dst = cv.undistort(img, cameraMatrix, dist, None, newCameraMatrix)
 # crop the image
 x, y, w, h = roi
 dst = dst[y:y+h, x:x+w]
-cv.imwrite('Camera_Calibration\cam1\image0_result.png', dst)
+# cv.imwrite('Camera_Calibration\cam1\image0_result.png', dst)
 
 
 
@@ -107,7 +108,7 @@ dst = cv.remap(img, mapx, mapy, cv.INTER_LINEAR)
 # crop the image
 x, y, w, h = roi
 dst = dst[y:y+h, x:x+w]
-cv.imwrite('caliResult2.png', dst)
+# cv.imwrite('caliResult2.png', dst)
 
 
 
@@ -118,6 +119,8 @@ mean_error = 0
 for i in range(len(objpoints)):
     imgpoints2, _ = cv.projectPoints(objpoints[i], rvecs[i], tvecs[i], cameraMatrix, dist)
     error = cv.norm(imgpoints[i], imgpoints2, cv.NORM_L2)/len(imgpoints2)
+    print("Error for image {}: {}".format(i, error))
     mean_error += error
 
+# error in pixels
 print( "total error: {}".format(mean_error/len(objpoints)) )
