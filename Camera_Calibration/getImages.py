@@ -14,7 +14,7 @@
 #     if k == 27:
 #         break
 #     elif k == ord('s'): # wait for 's' key to save and exit
-#         cv2.imwrite('Camera_Calibration\images\cam3\image' + str(num) + '.png', img)
+#         cv2.imwrite('Camera_Calibration\\cam3\\images\\image' + str(num) + '.png', img)
 #         print("image saved!")
 #         num += 1
 
@@ -26,19 +26,19 @@
 # cv2.destroyAllWindows()
 
 
-import cv2
+# import cv2
 
-def test_camera(index):
-    cap = cv2.VideoCapture(index)
-    if cap.isOpened():
-        print(f"Camera found at index {index}")
-        cap.release()
-        return True
-    else:
-        print(f"No camera at index {index}")
-        return False
+# def test_camera(index):
+#     cap = cv2.VideoCapture(index)
+#     if cap.isOpened():
+#         print(f"Camera found at index {index}")
+#         cap.release()
+#         return True
+#     else:
+#         print(f"No camera at index {index}")
+#         return False
 
-for i in range(10): # Check indices 0 to 9
-    if test_camera(i):
-        print("\n")
-        # break
+# for i in range(10): # Check indices 0 to 9
+#     if test_camera(i):
+#         print("\n")
+#         # break

@@ -2,3 +2,5 @@ env/
 models
 **/images/*
 Camera_Calibration/cam*/image*
+*.mp4
+CAD

@@ -19,12 +19,12 @@ import sys
 # 1. Convert the rotation vector to a rotation matrix
 # 2. Use matplotlib to plot the camera position
 
-cam_num = 'cam1'
+cam_num = 'cam3'
 # cam_matrix_file_path = 'Camera_Calibration/cam1/cameraMatrix.pkl'
 calibration_file_path = f'Camera_Calibration/{cam_num}/calibration.pkl'
 # distortion_file_path = 'Camera_Calibration/cam1/dist.pkl'
 image = None
-cap = cv.VideoCapture(0)
+cap = cv.VideoCapture(1)
 
 while cap.isOpened():
     ret, img = cap.read()
@@ -52,7 +52,7 @@ while cap.isOpened():
 cap.release()
 cv.destroyAllWindows()
 
-chessboardSize = (10,7)
+chessboardSize = (8,6)
 objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
 # print(objp)
 objp[:,:2] = np.mgrid[0:chessboardSize[0],0:chessboardSize[1]].T.reshape(-1,2)
@@ -61,14 +61,19 @@ objp[:,:2] = np.mgrid[0:chessboardSize[0],0:chessboardSize[1]].T.reshape(-1,2)
 size_of_chessboard_squares_mm = 25
 objp = objp * size_of_chessboard_squares_mm
 
+# Check if image was captured
+if image is None:
+    print("No image was captured. Exiting...")
+    sys.exit(1)
+
 gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 ret, corners = cv.findChessboardCorners(gray, chessboardSize, None)
 print(f"corners: {corners}")
 if not ret:
     print("Chessboard corners not found")
     sys.exit(1)
-cv.drawChessboardCorners(img, chessboardSize, corners, ret)
-cv.imshow('img', img)
+cv.drawChessboardCorners(image, chessboardSize, corners, ret)
+cv.imshow('img', image)
 cv.waitKey(0)
 
 with open(calibration_file_path, 'rb') as f:
@@ -79,10 +84,17 @@ print(f"Distortion Coefficients:\n{cam_intrinsics[1]}")
 
 # Get camera extrinsics
 if ret:
-    ret, rot_vec, trans_vec = cv.solvePnP(objectPoints=objp, 
+    ret_pnp, rot_vec, trans_vec = cv.solvePnP(objectPoints=objp, 
                 imagePoints=corners, 
                 cameraMatrix=cam_intrinsics[0], 
-                distCoeffs=cam_intrinsics[1],)
+                distCoeffs=cam_intrinsics[1])
+    
+    if not ret_pnp:
+        print("solvePnP failed")
+        sys.exit(1)
+else:
+    print("Chessboard corners not found, cannot compute extrinsics")
+    sys.exit(1)
 
 # Change from rotation vector to rotation matrix
 rot_mat, _ = cv.Rodrigues(rot_vec)
