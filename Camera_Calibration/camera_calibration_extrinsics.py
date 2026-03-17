@@ -24,7 +24,10 @@ cam_num = 'cam3'
 calibration_file_path = f'Camera_Calibration/{cam_num}/calibration.pkl'
 # distortion_file_path = 'Camera_Calibration/cam1/dist.pkl'
 image = None
-cap = cv.VideoCapture(1)
+# cam 1,2,3
+# cap = cv.VideoCapture(1)
+# cap = cv.VideoCapture(0)
+cap = cv.VideoCapture(3)
 
 while cap.isOpened():
     ret, img = cap.read()
