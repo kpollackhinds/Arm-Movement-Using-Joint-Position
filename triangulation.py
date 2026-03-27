@@ -29,6 +29,8 @@ files = [
     "cam_3_pose_landmarks.csv",
 ]
 
+count = 0
+num_points = 400
 # cam1
 with open(files[0], mode="r") as file:
     csvFile = csv.reader(file)
@@ -37,6 +39,8 @@ with open(files[0], mode="r") as file:
 
     # Points ends up being a list of 4 points, representing the 4 keypoints at a given frame at time (t).
     for line in csvFile:
+        if count >= num_points:
+            break
         points = [
             [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
             [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
@@ -44,9 +48,10 @@ with open(files[0], mode="r") as file:
             [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
         ]
         cam1_points.append(points)
-        print(points)
-        break
+        count += 1
+        # print(points)
 
+count = 0
 # cam2
 with open(files[1], mode="r") as file:
     csvFile = csv.reader(file)
@@ -54,6 +59,8 @@ with open(files[1], mode="r") as file:
     next(csvFile, None)
 
     for line in csvFile:
+        if count >= num_points:
+            break
         points = [
             [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
             [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
@@ -61,9 +68,10 @@ with open(files[1], mode="r") as file:
             [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
         ]
         cam2_points.append(points)
-        print(points)
-        break
+        count += 1
+        # print(points)
 
+count = 0
 # cam3
 with open(files[2], mode="r") as file:
     csvFile = csv.reader(file)
@@ -71,6 +79,8 @@ with open(files[2], mode="r") as file:
     next(csvFile, None)
 
     for line in csvFile:
+        if count >= num_points:
+            break
         points = [
             [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
             [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
@@ -78,11 +88,22 @@ with open(files[2], mode="r") as file:
             [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
         ]
         cam3_points.append(points)
-        print(points)
-        break
+        count += 1
+        # print(points)
 
 # Triangluate points
-np_array = np.array([cam1_points[0], cam2_points[0], cam3_points[0]])
-print(np_array.shape)
+# points_array = np.array([cam1_points[t][0], cam2_points[t][0], cam3_points[t][0]])
+projection_matrices = np.array([cam_1.projection_matrix, cam_2.projection_matrix, cam_3.projection_matrix])
+# print(points_array.shape)
+index = 3
 
-triangulated_points = cv2.triangulatePoints
+for t in range(num_points):
+    points_array = np.array([cam1_points[t][index], cam2_points[t][index], cam3_points[t][index]])
+    try:
+        point_3d = triangulate(points_array, projection_matrices)
+        print(f"Triangulated point at time {t}: {point_3d}")
+    except Exception as e:
+        # print(f"Error triangulating point at time {t}")
+        continue
+
+# print("Triangulated 3D point:", point_3d)
