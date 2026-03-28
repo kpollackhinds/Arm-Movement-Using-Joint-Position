@@ -1,8 +1,11 @@
+import sys
+
 import numpy as np
 import csv
 import cv2
 from utils_3D.core.triangulation import triangulate
 from utils_3D.core.camera import Camera
+from utils_3D.core.projection import get_camera_center_from_projection_matrix, undistort_points
 import pickle
 
 # First we need to get out our array of 2d point correspondences (N,2)
@@ -15,10 +18,22 @@ import pickle
 #
 
 # Need to impot our camera matrices.
-cam_1 = Camera("cam_1", projection_matrix=pickle.load(open("Camera_Calibration\\cam1\\projection_matrix.pkl", "rb")))
-cam_2 = Camera("cam_2", projection_matrix=pickle.load(open("Camera_Calibration\\cam2\\projection_matrix.pkl", "rb")))
-cam_3 = Camera("cam_3", projection_matrix=pickle.load(open("Camera_Calibration\\cam3\\projection_matrix.pkl", "rb")))
-
+cam_1 = Camera("cam_1", 
+               projection_matrix=pickle.load(open("Camera_Calibration\\cam1\\projection_matrix.pkl", "rb")),
+               camera_matrix= pickle.load(open("Camera_Calibration\\cam1\\cameraMatrix.pkl", "rb")),
+               distortion_coefficients=pickle.load(open("Camera_Calibration\\cam1\\dist.pkl", "rb"))
+               )
+cam_2 = Camera("cam_2", 
+               projection_matrix=pickle.load(open("Camera_Calibration\\cam2\\projection_matrix.pkl", "rb")),
+               camera_matrix= pickle.load(open("Camera_Calibration\\cam2\\cameraMatrix.pkl", "rb")),
+               distortion_coefficients=pickle.load(open("Camera_Calibration\\cam2\\dist.pkl", "rb"))
+               )
+cam_3 = Camera("cam_3", 
+               projection_matrix=pickle.load(open("Camera_Calibration\\cam3\\projection_matrix.pkl", "rb")),
+               camera_matrix= pickle.load(open("Camera_Calibration\\cam3\\cameraMatrix.pkl", "rb")),
+               distortion_coefficients=pickle.load(open("Camera_Calibration\\cam3\\dist.pkl", "rb"))
+               )
+    
 cam1_points = []
 cam2_points = []
 cam3_points = []
@@ -28,6 +43,29 @@ files = [
     "cam_2_pose_landmarks.csv",
     "cam_3_pose_landmarks.csv",
 ]
+
+
+# centers = [
+#     get_camera_center_from_projection_matrix(cam_1.projection_matrix),
+#     get_camera_center_from_projection_matrix(cam_2.projection_matrix),
+#     get_camera_center_from_projection_matrix(cam_3.projection_matrix),
+# ]
+# centers = np.array(centers)
+
+# v1 = centers[1] - centers[0]
+# v2 = centers[2] - centers[0]
+
+# cross_product = np.cross(v1, v2)
+# print("Cross product of v1 and v2:", cross_product)
+# # spread is cross product magnitude, which gives us an idea of how well the cameras are spread out in space. A larger spread indicates better triangulation potential.
+# spread = np.linalg.norm(cross_product)
+# print("Spread of the cameras:", spread)
+
+# print("Camera centers in world coordinates:")
+# for i, center in enumerate(centers):
+#     print(f"Camera {i+1} center: {center}")
+
+# sys.exit(0)
 
 count = 0
 num_points = 400
@@ -98,12 +136,23 @@ projection_matrices = np.array([cam_1.projection_matrix, cam_2.projection_matrix
 index = 3
 
 for t in range(num_points):
+
     points_array = np.array([cam1_points[t][index], cam2_points[t][index], cam3_points[t][index]])
+    cam1_points_undistorted = undistort_points(points_array[0].reshape(1, 2), cam_1.camera_matrix, cam_1.distortion_coefficients)
+    cam2_points_undistorted = undistort_points(points_array[1].reshape(1, 2), cam_2.camera_matrix, cam_2.distortion_coefficients)
+    cam3_points_undistorted = undistort_points(points_array[2].reshape(1, 2), cam_3.camera_matrix, cam_3.distortion_coefficients)
+    points_array_undistorted = np.array([cam1_points_undistorted[0], cam2_points_undistorted[0], cam3_points_undistorted[0]])
+
+    print(f"Original points at time {t}:", points_array)
+    print(f"Undistorted points at time {t}:", points_array_undistorted)
+
+    sys.exit(0)
     try:
-        point_3d = triangulate(points_array, projection_matrices)
+        point_3d = triangulate(points_array_undistorted, projection_matrices)
         print(f"Triangulated point at time {t}: {point_3d}")
     except Exception as e:
-        # print(f"Error triangulating point at time {t}")
+        print(f"Error triangulating point at time {t}")
         continue
 
 # print("Triangulated 3D point:", point_3d)
+
