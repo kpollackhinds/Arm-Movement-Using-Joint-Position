@@ -1,44 +1,47 @@
 import cv2
 
-# cap = cv2.VideoCapture(1)
+# cam1 =2 
+# cam2 = 0
 
-# num = 0
+cap = cv2.VideoCapture(3)
 
-# while cap.isOpened():
+num = 6
 
-#     succes, img = cap.read()
+while cap.isOpened():
 
-#     k = cv2.waitKey(5)
+    succes, img = cap.read()
 
-#     # escape key
-#     if k == 27:
-#         break
-#     elif k == ord('s'): # wait for 's' key to save and exit
-#         cv2.imwrite('Camera_Calibration\\cam3\\images\\image' + str(num) + '.png', img)
-#         print("image saved!")
-#         num += 1
+    k = cv2.waitKey(5)
 
-#     cv2.imshow('Img',img)
+    # escape key
+    if k == 27:
+        break
+    elif k == ord('s'): # wait for 's' key to save and exit
+        cv2.imwrite('Camera_Calibration\\cam3\\images\\image' + str(num) + '.png', img)
+        print("image saved!")
+        num += 1
 
-# # Release and destroy all windows before termination
-# cap.release()
+    cv2.imshow('Img',img)
 
-# cv2.destroyAllWindows()
+# Release and destroy all windows before termination
+cap.release()
+
+cv2.destroyAllWindows()
 
 
-import cv2
+# import cv2
 
-def test_camera(index):
-    cap = cv2.VideoCapture(index)
-    if cap.isOpened():
-        print(f"Camera found at index {index}")
-        cap.release()
-        return True
-    else:
-        print(f"No camera at index {index}")
-        return False
+# def test_camera(index):
+#     cap = cv2.VideoCapture(index)
+#     if cap.isOpened():
+#         print(f"Camera found at index {index}")
+#         cap.release()
+#         return True
+#     else:
+#         print(f"No camera at index {index}")
+#         return False
 
-for i in range(10): # Check indices 0 to 9
-    if test_camera(i):
-        print("\n")
-        # break
+# for i in range(10): # Check indices 0 to 9
+#     if test_camera(i):
+#         print("\n")
+#         # break

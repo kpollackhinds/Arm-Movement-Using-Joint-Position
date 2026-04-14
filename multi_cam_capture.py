@@ -42,11 +42,11 @@ fourcc = cv2.VideoWriter.fourcc(*'mp4v')
 frame_width = int(video_capture_1.get(cv2.CAP_PROP_FRAME_WIDTH))
 frame_height = int(video_capture_1.get(cv2.CAP_PROP_FRAME_HEIGHT))
 # cam1
-out1 = cv2.VideoWriter('output1.mp4', fourcc, 30.0, (frame_width, frame_height))
+out1 = cv2.VideoWriter('output1new_vid2.mp4', fourcc, 30.0, (frame_width, frame_height))
 # cam2
-out2 = cv2.VideoWriter('output2.mp4', fourcc, 30.0, (frame_width, frame_height))
+out2 = cv2.VideoWriter('output2new_vid2.mp4', fourcc, 30.0, (frame_width, frame_height))
 # cam3
-out3 = cv2.VideoWriter('output3.mp4', fourcc, 30.0, (frame_width, frame_height))
+out3 = cv2.VideoWriter('output3new_vid2.mp4', fourcc, 30.0, (frame_width, frame_height))
 
 while True:
     ret1, frame1 = video_capture_1.read()
@@ -84,7 +84,7 @@ frame1 = None
 frame2 = None
 frame3 = None
 
-################### Test multi camera capture #########################
+# ################## Test multi camera capture #########################
 # while True:
 #     ret2, frame2 = video_capture_2.read()
 #     ret1, frame1 = video_capture_1.read()
@@ -107,5 +107,5 @@ frame3 = None
 # video_capture_3.release()
 
 
-# cv2.destroyAllWindows()
+# # cv2.destroyAllWindows()
 
