@@ -5,7 +5,8 @@ import csv
 import cv2
 from utils_3D.core.triangulation import triangulate
 from utils_3D.core.camera import Camera
-from utils_3D.core.projection import get_camera_center_from_projection_matrix, undistort_points
+from utils_3D.core.projection import get_camera_center_from_projection_matrix, undistort_points, decompose_projection_matrix
+from utils_3D.visualization.plotting import plot_sequence
 import pickle
 
 # First we need to get out our array of 2d point correspondences (N,2)
@@ -68,7 +69,8 @@ files = [
 # sys.exit(0)
 
 count = 0
-num_points = 400
+start_frame = 1500
+end_frame = 1530
 # cam1
 with open(files[0], mode="r") as file:
     csvFile = csv.reader(file)
@@ -77,15 +79,16 @@ with open(files[0], mode="r") as file:
 
     # Points ends up being a list of 4 points, representing the 4 keypoints at a given frame at time (t).
     for line in csvFile:
-        if count >= num_points:
+        if count >= end_frame:
             break
-        points = [
-            [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
-            [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
-            [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
-            [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
-        ]
-        cam1_points.append(points)
+        if count >= start_frame:
+            points = [
+                [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
+                [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
+                [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
+                [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
+            ]
+            cam1_points.append(points)
         count += 1
         # print(points)
 
@@ -97,15 +100,16 @@ with open(files[1], mode="r") as file:
     next(csvFile, None)
 
     for line in csvFile:
-        if count >= num_points:
+        if count >= end_frame:
             break
-        points = [
-            [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
-            [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
-            [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
-            [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
-        ]
-        cam2_points.append(points)
+        if count >= start_frame:
+            points = [
+                [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
+                [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
+                [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
+                [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
+            ]
+            cam2_points.append(points)
         count += 1
         # print(points)
 
@@ -117,15 +121,16 @@ with open(files[2], mode="r") as file:
     next(csvFile, None)
 
     for line in csvFile:
-        if count >= num_points:
+        if count >= end_frame:
             break
-        points = [
-            [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
-            [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
-            [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
-            [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
-        ]
-        cam3_points.append(points)
+        if count >= start_frame:
+            points = [
+                [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
+                [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
+                [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
+                [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
+            ]
+            cam3_points.append(points)
         count += 1
         # print(points)
 
@@ -133,7 +138,10 @@ with open(files[2], mode="r") as file:
 # points_array = np.array([cam1_points[t][0], cam2_points[t][0], cam3_points[t][0]])
 projection_matrices = np.array([cam_1.projection_matrix, cam_2.projection_matrix, cam_3.projection_matrix])
 # print(points_array.shape)
+num_points = end_frame - start_frame
 index = 3
+
+triangulated_points = []
 
 for t in range(num_points):
 
@@ -143,16 +151,26 @@ for t in range(num_points):
     cam3_points_undistorted = undistort_points(points_array[2].reshape(1, 2), cam_3.camera_matrix, cam_3.distortion_coefficients)
     points_array_undistorted = np.array([cam1_points_undistorted[0], cam2_points_undistorted[0], cam3_points_undistorted[0]])
 
-    print(f"Original points at time {t}:", points_array)
-    print(f"Undistorted points at time {t}:", points_array_undistorted)
-
-    sys.exit(0)
     try:
         point_3d = triangulate(points_array_undistorted, projection_matrices)
         print(f"Triangulated point at time {t}: {point_3d}")
+        triangulated_points.append(point_3d)
     except Exception as e:
         print(f"Error triangulating point at time {t}")
         continue
 
-# print("Triangulated 3D point:", point_3d)
+# Build camera dicts for visualization
+cameras_vis = []
+for cam in [cam_1, cam_2, cam_3]:
+    K, R, center = decompose_projection_matrix(cam.projection_matrix)
+    # R is world-to-camera; R.T columns are camera's local axes in world coords
+    cameras_vis.append({"label": cam.name, "position": center, "rotation": R.T})
+
+if triangulated_points:
+    plot_sequence(
+        cameras_vis,
+        triangulated_points,
+        title=f"Triangulation — frames {start_frame}–{end_frame-1}, keypoint {index}",
+        start_frame=start_frame,
+    )
 

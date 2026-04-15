@@ -1,22 +1,15 @@
-from typing import Optional
-import mediapipe as mp
-from mediapipe.python.solutions import pose
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-from mediapipe.framework.formats import landmark_pb2
-import cv2 as cv
-import numpy as np
 import csv
 from ultralytics import YOLO #type: ignore
 
 
-def run(model_path: str, video_path: str, export_path: str):
+def run(model_path: str, video_path: str, export_path: str, gpu: bool = True):
 
     # Load a pretrained YOLO11n model
     model = YOLO("yolo11n-pose.pt")
 
     # Run inference on the source
-    results = model.predict(source = video_path, imgsz= (480,640), show=True, stream=True)  # generator of Results objects
+    if gpu:
+        results = model.predict(source = video_path, imgsz= (480,640), show=True, stream=True, device=0)  # generator of Results objects
 
     CONF_THRESHOLD = 0.75
     # Iterate through the generator to process each frame
@@ -88,6 +81,6 @@ if __name__ == "__main__":
 
     model_path = r'C:\Users\kxfor\OneDrive\Documents\Projects\Personal_Projects\Arm-Movement-Using-Joint-Position\models\pose_landmarker_full.task'
     for num in cam_nums:
-        export_path = f'cam_{num}_pose_landmarks.csv'
-        video_path = r'C:\Users\kxfor\OneDrive\Documents\Projects\Personal_Projects\Arm-Movement-Using-Joint-Position\output{}.mp4'.format(num)
+        export_path = f'cam_{num}_pose_landmarks2.csv'
+        video_path = rf'C:\Users\Kahlil Pollack-Hinds\Documents\Projects\Arm-Movement-Using-Joint-Position\output{num}new_vid2.mp4'
         run(model_path, video_path, export_path)

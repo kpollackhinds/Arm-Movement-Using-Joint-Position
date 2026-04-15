@@ -26,6 +26,22 @@ def get_camera_center_from_projection_matrix(projection_matrix: np.ndarray) -> n
     column4 = projection_matrix[0:3, 3]
     return -np.linalg.inv(Q) @ column4
 
+def decompose_projection_matrix(projection_matrix: np.ndarray):
+    """
+    Decompose a 3x4 projection matrix into intrinsics K, extrinsic rotation R,
+    and camera center C in world coordinates.
+
+    Returns:
+        K: (3, 3) intrinsic matrix
+        R: (3, 3) rotation matrix (world-to-camera)
+        C: (3,) camera center in world coordinates
+    """
+    result = cv2.decomposeProjectionMatrix(projection_matrix)
+    K, R, _, _, _, _, _ = result
+    K = K / K[2, 2]  # normalize so K[2,2] = 1
+    C = get_camera_center_from_projection_matrix(projection_matrix)
+    return K, R, C
+
 def undistort_points(points_2d: np.ndarray, camera_intrinsics: np.ndarray, distortion_coefficients: np.ndarray) -> np.array:
     """
     Args:

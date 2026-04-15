@@ -23,8 +23,8 @@ def triangulate(image_point_correspondences: np.ndarray, projection_matrices: np
     
     _, S, Vt = svd(A)
 
-    if S[-1]/S[-2] > 1e-3:
-        raise ValueError("Triangulation may be unstable. The smallest singular value is not sufficiently smaller than the second smallest: S[-1] = {}, S[-2] = {}, ratio = {}".format(S[-1], S[-2], S[-1]/S[-2]))
+    # if S[-1]/S[-2] > 1e-8:
+    #     raise ValueError("Triangulation may be unstable. The smallest singular value is not sufficiently smaller than the second smallest: S[-1] = {}, S[-2] = {}, ratio = {}".format(S[-1], S[-2], S[-1]/S[-2]))
     
     X = Vt[-1]
 

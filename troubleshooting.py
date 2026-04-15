@@ -147,3 +147,11 @@ with open(files[2], mode="r") as file:
 # @ frame t
 t = 0
 point_correspondences = np.array([cam1_points[t], cam2_points[t], cam3_points[t]])
+
+projection_matrices = np.array([cam_1.projection_matrix, cam_2.projection_matrix, cam_3.projection_matrix])
+K_list = [cam_1.camera_matrix, cam_2.camera_matrix, cam_3.camera_matrix]
+dist_list = [cam_1.distortion_coefficients, cam_2.distortion_coefficients, cam_3.distortion_coefficients]
+
+full_triangulation_diagnostic(point_correspondences, projection_matrices, K_list, dist_list)
+
+
