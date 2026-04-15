@@ -2,7 +2,7 @@ import cv2
 
 # Try different camera indices (0, 1, 2, etc.) to find your external camera
 # 0 is usually the default webcam, 1 or higher might be your external camera
-cap = cv2.VideoCapture(2) 
+cap = cv2.VideoCapture(0) 
 
 if not cap.isOpened():
     print("Error: Could not open camera.")

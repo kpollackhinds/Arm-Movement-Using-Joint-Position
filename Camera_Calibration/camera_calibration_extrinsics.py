@@ -19,15 +19,15 @@ import sys
 # 1. Convert the rotation vector to a rotation matrix
 # 2. Use matplotlib to plot the camera position
 
-cam_num = 'cam3'
+cam_num = 'cam1'
 # cam_matrix_file_path = 'Camera_Calibration/cam1/cameraMatrix.pkl'
 calibration_file_path = f'Camera_Calibration/{cam_num}/calibration.pkl'
 # distortion_file_path = 'Camera_Calibration/cam1/dist.pkl'
 image = None
 # cam 1,2,3
-# cap = cv.VideoCapture(1)
+cap = cv.VideoCapture(1)
 # cap = cv.VideoCapture(0)
-cap = cv.VideoCapture(3)
+# cap = cv.VideoCapture(3)
 
 while cap.isOpened():
     ret, img = cap.read()
@@ -55,7 +55,7 @@ while cap.isOpened():
 cap.release()
 cv.destroyAllWindows()
 
-chessboardSize = (8,6)
+chessboardSize = (10,7)
 objp = np.zeros((chessboardSize[0] * chessboardSize[1], 3), np.float32)
 # print(objp)
 objp[:,:2] = np.mgrid[0:chessboardSize[0],0:chessboardSize[1]].T.reshape(-1,2)
