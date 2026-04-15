@@ -40,9 +40,9 @@ cam2_points = []
 cam3_points = []
 
 files = [
-    "cam_1_pose_landmarks.csv",
-    "cam_2_pose_landmarks.csv",
-    "cam_3_pose_landmarks.csv",
+    "cam_1_pose_landmarks2.csv",
+    "cam_2_pose_landmarks2.csv",
+    "cam_3_pose_landmarks2.csv",
 ]
 
 
@@ -69,8 +69,8 @@ files = [
 # sys.exit(0)
 
 count = 0
-start_frame = 1500
-end_frame = 1530
+start_frame = 600
+end_frame = 1800
 # cam1
 with open(files[0], mode="r") as file:
     csvFile = csv.reader(file)
@@ -82,13 +82,16 @@ with open(files[0], mode="r") as file:
         if count >= end_frame:
             break
         if count >= start_frame:
-            points = [
-                [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
-                [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
-                [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
-                [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
-            ]
-            cam1_points.append(points)
+            if "null" in (line[1], line[7], line[9], line[11]):
+                cam1_points.append(None)
+            else:
+                points = [
+                    [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
+                    [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
+                    [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
+                    [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
+                ]
+                cam1_points.append(points)
         count += 1
         # print(points)
 
@@ -103,13 +106,16 @@ with open(files[1], mode="r") as file:
         if count >= end_frame:
             break
         if count >= start_frame:
-            points = [
-                [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
-                [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
-                [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
-                [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
-            ]
-            cam2_points.append(points)
+            if "null" in (line[1], line[7], line[9], line[11]):
+                cam2_points.append(None)
+            else:
+                points = [
+                    [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
+                    [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
+                    [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
+                    [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
+                ]
+                cam2_points.append(points)
         count += 1
         # print(points)
 
@@ -124,13 +130,16 @@ with open(files[2], mode="r") as file:
         if count >= end_frame:
             break
         if count >= start_frame:
-            points = [
-                [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
-                [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
-                [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
-                [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
-            ]
-            cam3_points.append(points)
+            if "null" in (line[1], line[7], line[9], line[11]):
+                cam3_points.append(None)
+            else:
+                points = [
+                    [float(line[1].split(",")[0][3:]), float(line[1].split(",")[1][4:])],
+                    [float(line[7].split(",")[0][3:]), float(line[7].split(",")[1][4:])],
+                    [float(line[9].split(",")[0][3:]), float(line[9].split(",")[1][4:])],
+                    [float(line[11].split(",")[0][3:]), float(line[11].split(",")[1][4:])],
+                ]
+                cam3_points.append(points)
         count += 1
         # print(points)
 
@@ -144,6 +153,9 @@ index = 3
 triangulated_points = []
 
 for t in range(num_points):
+    if cam1_points[t] is None or cam2_points[t] is None or cam3_points[t] is None:
+        print(f"Skipping frame {t}: missing keypoints in one or more cameras")
+        continue
 
     points_array = np.array([cam1_points[t][index], cam2_points[t][index], cam3_points[t][index]])
     cam1_points_undistorted = undistort_points(points_array[0].reshape(1, 2), cam_1.camera_matrix, cam_1.distortion_coefficients)

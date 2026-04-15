@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-_AXIS_LEN   = 0.15   # length of the orientation axes drawn per camera
+_AXIS_LEN   = 20   # length of the orientation axes drawn per camera
 _RAY_ALPHA  = 0.4    # opacity of rays from cameras to the triangulated point
 _CAM_COLOR  = "#00BFFF"
 _POINT_COLOR = "#FF4500"
@@ -46,7 +46,7 @@ def _make_camera_traces(cam_idx, position, rotation, point):
             y=[pos[1], end[1]],
             z=[pos[2], end[2]],
             mode="lines",
-            line=dict(color=color, width=4),
+            line=dict(color=color, width=8),
             name=f"cam{cam_idx} {ax_name}-axis",
             legendgroup=f"cam{cam_idx}_axes",
             showlegend=(ax_name == "x"),   # one legend entry per camera
@@ -71,7 +71,7 @@ def _make_camera_traces(cam_idx, position, rotation, point):
     traces.append(go.Scatter3d(
         x=[pos[0]], y=[pos[1]], z=[pos[2]],
         mode="markers+text",
-        marker=dict(size=6, color=_CAM_COLOR, symbol="square"),
+        marker=dict(size=1, color=_CAM_COLOR, symbol="square"),
         text=[f"cam{cam_idx}"],
         textposition="top center",
         textfont=dict(size=11, color=_CAM_COLOR),
@@ -97,26 +97,14 @@ def _make_world_frame_traces(axis_length):
         traces.append(go.Scatter3d(
             x=[0, end[0]], y=[0, end[1]], z=[0, end[2]],
             mode="lines+text",
-            line=dict(color=color, width=6),
+            line=dict(color=color, width=10),
             text=["", label],
             textposition="top center",
-            textfont=dict(size=13, color=color),
+            textfont=dict(size=16, color=color),
             name=f"world {label}",
             legendgroup="world_frame",
             showlegend=(label == "X"),
         ))
-    # Origin marker
-    traces.append(go.Scatter3d(
-        x=[0], y=[0], z=[0],
-        mode="markers+text",
-        marker=dict(size=5, color="white", symbol="cross"),
-        text=["origin"],
-        textposition="bottom center",
-        textfont=dict(size=10, color="white"),
-        name="world origin",
-        legendgroup="world_frame",
-        showlegend=False,
-    ))
     return traces
 
 
@@ -200,7 +188,7 @@ def plot_scene(
         all_traces.append(go.Scatter3d(
             x=[pt[0]], y=[pt[1]], z=[pt[2]],
             mode="markers+text",
-            marker=dict(size=9, color=_POINT_COLOR, symbol="diamond"),
+            marker=dict(size=1, color=_POINT_COLOR, symbol="circle"),
             text=["3D point"],
             textposition="top center",
             textfont=dict(size=12, color=_POINT_COLOR),
@@ -297,7 +285,7 @@ def plot_sequence(
             cam_traces.append(go.Scatter3d(
                 x=[pos[0], end[0]], y=[pos[1], end[1]], z=[pos[2], end[2]],
                 mode="lines",
-                line=dict(color=color, width=4),
+                line=dict(color=color, width=8),
                 showlegend=False,
             ))
 
@@ -312,7 +300,7 @@ def plot_sequence(
     point_trace = go.Scatter3d(
         x=[pt0[0]], y=[pt0[1]], z=[pt0[2]],
         mode="markers+text",
-        marker=dict(size=9, color=_POINT_COLOR, symbol="diamond"),
+        marker=dict(size=1, color=_POINT_COLOR, symbol="circle"),
         text=[f"frame {start_frame}"],
         textposition="top center",
         textfont=dict(size=12, color=_POINT_COLOR),
@@ -358,7 +346,7 @@ def plot_sequence(
         frame_data.append(go.Scatter3d(
             x=[pt[0]], y=[pt[1]], z=[pt[2]],
             mode="markers+text",
-            marker=dict(size=9, color=_POINT_COLOR, symbol="diamond"),
+            marker=dict(size=2, color=_POINT_COLOR, symbol="circle"),
             text=[f"frame {frame_num}"],
             textposition="top center",
             textfont=dict(size=12, color=_POINT_COLOR),

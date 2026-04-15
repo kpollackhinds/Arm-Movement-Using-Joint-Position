@@ -50,10 +50,6 @@ def run(model_path: str, video_path: str, export_path: str, gpu: bool = True):
                 else:
                     print(f"Frame {frame_number}: No high confidence person detected")
                     row.extend(["null"]*17)
-                
-                writer.writerow(row)
-
-                frame_number += 1
 
             else:
                 print("No person detected in frame")

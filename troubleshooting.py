@@ -17,33 +17,33 @@ def full_triangulation_diagnostic(image_point_correspondences, projection_matric
     _, S, Vt = np.linalg.svd(A)
     X = Vt[-1]
 
-    # print("=" * 60)
-    # print("1. INPUT CORRESPONDENCES")
-    # for i, pt in enumerate(image_point_correspondences):
-    #     print(f"   Cam {i}: {pt}")
+    print("=" * 60)
+    print("1. INPUT CORRESPONDENCES")
+    for i, pt in enumerate(image_point_correspondences):
+        print(f"   Cam {i}: {pt}")
 
-    # print("\n2. SINGULAR VALUES")
-    # print(f"   S = {S}")
-    # print(f"   S[-1]/S[-2] = {S[-1]/S[-2]:.6f}  (want << 1e-3)")
-    # print(f"   S[-2]/S[-3] = {S[-2]/S[-3]:.6f}")
+    print("\n2. SINGULAR VALUES")
+    print(f"   S = {S}")
+    print(f"   S[-1]/S[-2] = {S[-1]/S[-2]:.6f}  (want << 1e-3)")
+    print(f"   S[-2]/S[-3] = {S[-2]/S[-3]:.6f}")
 
-    # print("\n3. RAW HOMOGENEOUS SOLUTION")
-    # print(f"   X = {X}")
-    # print(f"   w = {X[3]:.8f}  (near zero = point at infinity)")
+    print("\n3. RAW HOMOGENEOUS SOLUTION")
+    print(f"   X = {X}")
+    print(f"   w = {X[3]:.8f}  (near zero = point at infinity)")
 
-    # print("\n4. PROJECTION MATRIX SANITY")
-    # for i, P in enumerate(projection_matrices):
-    #     Q = P[:3, :3]
-    #     cond = np.linalg.cond(Q)
-    #     center = get_camera_center_from_projection_matrix(P)
-    #     print(f"   Cam {i}: condition(Q)={cond:.2f}, center={center}")
+    print("\n4. PROJECTION MATRIX SANITY")
+    for i, P in enumerate(projection_matrices):
+        Q = P[:3, :3]
+        cond = np.linalg.cond(Q)
+        center = get_camera_center_from_projection_matrix(P)
+        print(f"   Cam {i}: condition(Q)={cond:.2f}, center={center}")
 
-    # print("\n5. DLT MATRIX A")
-    # print(f"   Shape: {A.shape}")
-    # print(f"   Rank: {np.linalg.matrix_rank(A)}")
-    # print(f"   A =\n{A}")
+    print("\n5. DLT MATRIX A")
+    print(f"   Shape: {A.shape}")
+    print(f"   Rank: {np.linalg.matrix_rank(A)}")
+    print(f"   A =\n{A}")
 
-    # print("\n6. REPROJECTION CHECK (using raw Vt[-1])")
+    print("\n6. REPROJECTION CHECK (using raw Vt[-1])")
     errors = {}
     if abs(X[3]) > 1e-8:
         X_cart = X[:3] / X[3]
@@ -62,9 +62,9 @@ def full_triangulation_diagnostic(image_point_correspondences, projection_matric
 
 
 files = [
-    "cam_1_pose_landmarks.csv",
-    "cam_2_pose_landmarks.csv",
-    "cam_3_pose_landmarks.csv",
+    "cam_1_pose_landmarks2.csv",
+    "cam_2_pose_landmarks2.csv",
+    "cam_3_pose_landmarks2.csv",
 ]
 # Need to impot our camera matrices.
 cam_1 = Camera("cam_1", 
