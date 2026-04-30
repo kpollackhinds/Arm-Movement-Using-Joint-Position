@@ -31,7 +31,7 @@ def triangulate(image_point_correspondences: np.ndarray, projection_matrices: np
 
 
     if not return_homogeneous:
-        if X[3] < 1e-6:
+        if abs(X[3]) < 1e-6:
             raise ValueError("Triangulated point is at infinity (homogeneous coordinate is zero).")
         
         X = X / X[3]  # Convert from homogeneous to Cartesian coordinates

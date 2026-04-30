@@ -1,5 +1,8 @@
+from typing import Union
+
 import numpy as np
 import plotly.graph_objects as go
+from inference.yolov11.keypoint_mapping import KEYPOINT_MAPPING
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
@@ -108,12 +111,54 @@ def _make_world_frame_traces(axis_length):
     return traces
 
 
+def _make_pose_traces(keypoints_3d: Union[list, np.ndarray], keypoint_mapping: list[tuple[int, int]]):
+    """Return (markers_trace, skeleton_trace) for a pose given 3-D keypoints.
+
+    keypoints_3d : list of items, each either array-like (3,) or None.
+    keypoint_mapping : list of tuple[int, int], each tuple defines a connection between two keypoints.
+    """
+    xs, ys, zs = [], [], []
+    for kp in keypoints_3d:
+        if kp is not None:
+            pt = _to_array(kp)
+            xs.append(float(pt[0])); ys.append(float(pt[1])); zs.append(float(pt[2]))
+        else:
+            xs.append(None); ys.append(None); zs.append(None)
+
+    markers_trace = go.Scatter3d(
+        x=xs, y=ys, z=zs,
+        mode="markers",
+        marker=dict(size=4, color=_POINT_COLOR),
+        name="pose keypoints",
+        showlegend=True,
+    )
+
+    sx, sy, sz = [], [], []
+    for a, b in keypoint_mapping:
+        if keypoints_3d[a] is not None and keypoints_3d[b] is not None:
+            pa, pb = _to_array(keypoints_3d[a]), _to_array(keypoints_3d[b])
+            sx += [float(pa[0]), float(pb[0]), None]
+            sy += [float(pa[1]), float(pb[1]), None]
+            sz += [float(pa[2]), float(pb[2]), None]
+
+    skeleton_trace = go.Scatter3d(
+        x=sx, y=sy, z=sz,
+        mode="lines",
+        line=dict(color=_POINT_COLOR, width=3),
+        name="skeleton",
+        showlegend=True,
+    )
+
+    return markers_trace, skeleton_trace
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def plot_scene(
     cameras,
     point_3d=None,
     *,
+    keypoints=None,
     title="3D Triangulation Scene",
     axis_length=_AXIS_LEN,
     show=True,
@@ -178,12 +223,16 @@ def plot_scene(
             cam_idx=label,
             position=cam["position"],
             rotation=cam["rotation"],
-            point=point_3d,
+            point=None if keypoints is not None else point_3d,
         )
         all_traces.extend(traces)
 
-    # ── Triangulated point ────────────────────────────────────────────────────
-    if point_3d is not None:
+    # ── Pose keypoints / single point ─────────────────────────────────────────
+    if keypoints is not None:
+        markers_trace, skeleton_trace = _make_pose_traces(keypoints, KEYPOINT_MAPPING)
+        all_traces.append(markers_trace)
+        all_traces.append(skeleton_trace)
+    elif point_3d is not None:
         pt = _to_array(point_3d)
         all_traces.append(go.Scatter3d(
             x=[pt[0]], y=[pt[1]], z=[pt[2]],
@@ -228,19 +277,20 @@ def plot_sequence(
     title="3D Triangulation Sequence",
     axis_length=_AXIS_LEN,
     start_frame=0,
+    trail_keypoint=0,
 ):
     """
     Interactive Plotly visualization with a slider to step through
-    triangulated 3D points frame by frame.
+    a pose skeleton frame by frame.
 
     Parameters
     ----------
     cameras : list of dict
-        Same format as plot_scene — each dict has "position", "rotation",
-        and optionally "label".
+        Same format as plot_scene.
 
-    points_3d : list of array-like (3,)
-        One triangulated 3D point per frame.
+    points_3d : list of (list of 17 array-like (3,)) or None
+        One entry per frame. Each entry is either None (frame skipped) or a
+        list of 17 [x, y, z] keypoints.
 
     title : str
         Plot title.
@@ -250,19 +300,19 @@ def plot_sequence(
 
     start_frame : int
         Frame number offset for labelling (so slider shows actual frame numbers).
+
+    trail_keypoint : int
+        Index (0–16) of the keypoint whose path is drawn as a trail.
     """
     global _AXIS_LEN
     _AXIS_LEN = axis_length
 
-    # Build static traces (world frame + cameras)
+    # ── Static traces: world frame + cameras ──────────────────────────────────
     cam_traces = []
-
-    # ── World reference frame at origin ───────────────────────────────────────
     cam_traces.extend(_make_world_frame_traces(axis_length * 2))
 
     for cam in cameras:
         label = cam.get("label", "cam")
-        # Camera marker
         pos = _to_array(cam["position"])
         cam_traces.append(go.Scatter3d(
             x=[pos[0]], y=[pos[1]], z=[pos[2]],
@@ -274,7 +324,6 @@ def plot_sequence(
             name=label,
             showlegend=True,
         ))
-        # Orientation axes
         x_ax, y_ax, z_ax = _rotation_to_axes(cam["rotation"])
         for ax_vec, ax_name, color in [
             (x_ax, "x", _AXIS_COLORS["x"]),
@@ -291,87 +340,86 @@ def plot_sequence(
 
     num_cam_traces = len(cam_traces)
 
-    # The point trace + ray traces that will be updated per frame
-    # We need: 1 point marker + 1 ray per camera + 1 trail trace
-    # Initial frame
-    pt0 = _to_array(points_3d[0])
+    # ── Initial dynamic traces (first valid frame) ────────────────────────────
+    first_valid = next((f for f in points_3d if f is not None), None)
 
-    # Point marker
-    point_trace = go.Scatter3d(
-        x=[pt0[0]], y=[pt0[1]], z=[pt0[2]],
-        mode="markers+text",
-        marker=dict(size=1, color=_POINT_COLOR, symbol="circle"),
-        text=[f"frame {start_frame}"],
-        textposition="top center",
-        textfont=dict(size=12, color=_POINT_COLOR),
-        name="3D point",
-        showlegend=True,
-    )
+    if first_valid is not None:
+        kp_trace, skel_trace = _make_pose_traces(first_valid, KEYPOINT_MAPPING)
+        tp = _to_array(first_valid[trail_keypoint])
+        trail_xs, trail_ys, trail_zs = [float(tp[0])], [float(tp[1])], [float(tp[2])]
+    else:
+        kp_trace = go.Scatter3d(x=[], y=[], z=[], mode="markers",
+                                marker=dict(size=4, color=_POINT_COLOR),
+                                name="pose keypoints", showlegend=True)
+        skel_trace = go.Scatter3d(x=[], y=[], z=[], mode="lines",
+                                  line=dict(color=_POINT_COLOR, width=3),
+                                  name="skeleton", showlegend=True)
+        trail_xs, trail_ys, trail_zs = [], [], []
 
-    # Rays from each camera to the point
-    ray_traces = []
-    for cam in cameras:
-        pos = _to_array(cam["position"])
-        ray_traces.append(go.Scatter3d(
-            x=[pos[0], pt0[0]], y=[pos[1], pt0[1]], z=[pos[2], pt0[2]],
-            mode="lines",
-            line=dict(color=_CAM_COLOR, width=1.5, dash="dot"),
-            opacity=_RAY_ALPHA,
-            showlegend=False,
-        ))
-
-    # Trail of all points seen so far
     trail_trace = go.Scatter3d(
-        x=[pt0[0]], y=[pt0[1]], z=[pt0[2]],
+        x=trail_xs, y=trail_ys, z=trail_zs,
         mode="markers",
         marker=dict(size=3, color=_POINT_COLOR, opacity=0.3),
         name="trail",
         showlegend=True,
     )
 
-    all_traces = cam_traces + [point_trace] + ray_traces + [trail_trace]
+    all_traces = cam_traces + [kp_trace, skel_trace, trail_trace]
     fig = go.Figure(data=all_traces)
 
-    # Build frames for the slider
+    # ── Frames for slider ─────────────────────────────────────────────────────
+    trail_x_acc = []
+    trail_y_acc = []
+    trail_z_acc = []
+
     frames = []
-    for i, pt in enumerate(points_3d):
-        pt = _to_array(pt)
+    for i, frame_kps in enumerate(points_3d):
         frame_num = start_frame + i
 
-        # Trail: all points up to and including this frame
-        trail_pts = np.array([_to_array(p) for p in points_3d[:i+1]])
+        if frame_kps is not None and frame_kps[trail_keypoint] is not None:
+            tp = _to_array(frame_kps[trail_keypoint])
+            trail_x_acc.append(float(tp[0]))
+            trail_y_acc.append(float(tp[1]))
+            trail_z_acc.append(float(tp[2]))
 
-        frame_data = []
-        # Update point marker
-        frame_data.append(go.Scatter3d(
-            x=[pt[0]], y=[pt[1]], z=[pt[2]],
-            mode="markers+text",
-            marker=dict(size=2, color=_POINT_COLOR, symbol="circle"),
-            text=[f"frame {frame_num}"],
-            textposition="top center",
-            textfont=dict(size=12, color=_POINT_COLOR),
-        ))
-        # Update rays
-        for cam in cameras:
-            pos = _to_array(cam["position"])
-            frame_data.append(go.Scatter3d(
-                x=[pos[0], pt[0]], y=[pos[1], pt[1]], z=[pos[2], pt[2]],
-                mode="lines",
-                line=dict(color=_CAM_COLOR, width=1.5, dash="dot"),
-                opacity=_RAY_ALPHA,
-            ))
-        # Update trail
-        frame_data.append(go.Scatter3d(
-            x=trail_pts[:, 0].tolist(),
-            y=trail_pts[:, 1].tolist(),
-            z=trail_pts[:, 2].tolist(),
-            mode="markers",
-            marker=dict(size=3, color=_POINT_COLOR, opacity=0.3),
-        ))
+        if frame_kps is not None:
+            xs, ys, zs = [], [], []
+            for kp in frame_kps:
+                if kp is not None:
+                    pt = _to_array(kp)
+                    xs.append(float(pt[0])); ys.append(float(pt[1])); zs.append(float(pt[2]))
+                else:
+                    xs.append(None); ys.append(None); zs.append(None)
 
-        # Trace indices to update: point + rays + trail (after cam_traces)
-        trace_indices = list(range(num_cam_traces, num_cam_traces + 1 + len(cameras) + 1))
+            sx, sy, sz = [], [], []
+            for a, b in KEYPOINT_MAPPING:
+                if frame_kps[a] is not None and frame_kps[b] is not None:
+                    pa, pb = _to_array(frame_kps[a]), _to_array(frame_kps[b])
+                    sx += [float(pa[0]), float(pb[0]), None]
+                    sy += [float(pa[1]), float(pb[1]), None]
+                    sz += [float(pa[2]), float(pb[2]), None]
 
+            frame_data = [
+                go.Scatter3d(x=xs, y=ys, z=zs, mode="markers",
+                             marker=dict(size=4, color=_POINT_COLOR)),
+                go.Scatter3d(x=sx, y=sy, z=sz, mode="lines",
+                             line=dict(color=_POINT_COLOR, width=3)),
+                go.Scatter3d(x=list(trail_x_acc), y=list(trail_y_acc), z=list(trail_z_acc),
+                             mode="markers",
+                             marker=dict(size=3, color=_POINT_COLOR, opacity=0.3)),
+            ]
+        else:
+            frame_data = [
+                go.Scatter3d(x=[], y=[], z=[], mode="markers",
+                             marker=dict(size=4, color=_POINT_COLOR)),
+                go.Scatter3d(x=[], y=[], z=[], mode="lines",
+                             line=dict(color=_POINT_COLOR, width=3)),
+                go.Scatter3d(x=list(trail_x_acc), y=list(trail_y_acc), z=list(trail_z_acc),
+                             mode="markers",
+                             marker=dict(size=3, color=_POINT_COLOR, opacity=0.3)),
+            ]
+
+        trace_indices = [num_cam_traces, num_cam_traces + 1, num_cam_traces + 2]
         frames.append(go.Frame(
             data=frame_data,
             traces=trace_indices,
@@ -380,7 +428,7 @@ def plot_sequence(
 
     fig.frames = frames
 
-    # Slider
+    # ── Slider + layout ───────────────────────────────────────────────────────
     sliders = [dict(
         active=0,
         currentvalue=dict(prefix="Frame: ", font=dict(size=14)),
