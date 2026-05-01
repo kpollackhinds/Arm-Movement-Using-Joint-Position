@@ -10,6 +10,7 @@ from utils_3D.core.camera import Camera
 from utils_3D.core.projection import get_camera_center_from_projection_matrix, undistort_points, decompose_projection_matrix
 from utils_3D.visualization.plotting import plot_sequence
 import pickle
+from OneEuroFilter import OneEuroFilter
 
 # First we need to get out our array of 2d point correspondences (N,2)
 # We will have M points, but that just means we triangulate M times, so we can just do it in a loop.
@@ -48,6 +49,14 @@ def parse_landmarks_csv(filepath, start_frame, end_frame):
             count += 1
     return points
 
+def filter(point: Point3D, timestamp: float) -> Point3D:
+    """
+    Apply a One Euro Filter to the 3D point to smooth it over time.
+    """
+    x = euro_filer(point.x, timestamp)
+    y = euro_filer(point.y, timestamp)
+    z = euro_filer(point.z, timestamp)
+    return Point3D(x, y, z)
 
 # Need to impot our camera matrices.
 cam_1 = Camera("cam_1", 
@@ -87,7 +96,7 @@ frame_count = end_frame - start_frame
 index = 3
 
 triangulated_points = []
-
+euro_filer = OneEuroFilter(freq=30, mincutoff=1.0, beta=0.0)  # Adjust parameters as needed
 for t in range(frame_count):
     if cam1_points[t] is None or cam2_points[t] is None or cam3_points[t] is None:
         print(f"Skipping frame {t}: missing keypoints in one or more cameras")
@@ -104,6 +113,7 @@ for t in range(frame_count):
 
         try:
             point_3d = triangulate(kp_undistorted, projection_matrices)
+            filtered_point_3d = filter(point_3d, timestamp=t/30)  # Assuming 30 FPS
             frame_3d.append(point_3d)
         except Exception as e:
             print(f"Error triangulating keypoint {kp_idx} at frame {t}")
@@ -116,15 +126,16 @@ for t in range(frame_count):
 # Build camera dicts for visualization
 cameras_vis = []
 for cam in [cam_1, cam_2, cam_3]:
-    K, R, center = decompose_projection_matrix(cam.projection_matrix)
+    if cam.projection_matrix:
+        K, R, center = decompose_projection_matrix(cam.projection_matrix)
     # R is world-to-camera; R.T columns are camera's local axes in world coords
-    cameras_vis.append({"label": cam.name, "position": center, "rotation": R.T})
+        cameras_vis.append({"label": cam.name, "position": center, "rotation": R.T})
 
 if triangulated_points:
     plot_sequence(
         cameras_vis,
         triangulated_points,
-        title=f"Triangulation — frames {start_frame}–{end_frame-1}",
+        title=f"Triangulation — frames {start_frame} — {end_frame-1}",
         start_frame=start_frame,
     )
 

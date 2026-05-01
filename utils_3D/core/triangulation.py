@@ -1,7 +1,8 @@
 import numpy as np
 from numpy.linalg import svd
+from utils_3D.core.point import Point3D
 
-def triangulate(image_point_correspondences: np.ndarray, projection_matrices: np.ndarray, return_homogeneous: bool = False) -> np.ndarray:
+def triangulate(image_point_correspondences: np.ndarray, projection_matrices: np.ndarray, return_homogeneous: bool = False) -> "Point3D | np.ndarray":
     """
     Args:
         image_point_correspondences: An (N, 2) array of 2D points in the image planes of N cameras (Non homogeneous).
@@ -31,11 +32,7 @@ def triangulate(image_point_correspondences: np.ndarray, projection_matrices: np
 
 
     if not return_homogeneous:
-        if abs(X[3]) < 1e-6:
-            raise ValueError("Triangulated point is at infinity (homogeneous coordinate is zero).")
-        
-        X = X / X[3]  # Convert from homogeneous to Cartesian coordinates
-        X = X[:3]
+        return Point3D.from_homogeneous(X)
 
     return X
 
