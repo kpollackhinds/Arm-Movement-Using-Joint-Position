@@ -1,5 +1,6 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CALIBRATION_DIR, LANDMARKS_DIR
 import numpy as np
@@ -9,6 +10,7 @@ from utils_3D.core.triangulation import triangulate
 from utils_3D.core.camera import Camera
 from utils_3D.core.projection import get_camera_center_from_projection_matrix, undistort_points, decompose_projection_matrix
 from utils_3D.visualization.plotting import plot_sequence
+from utils_3D.core.point import Point3D
 import pickle
 from OneEuroFilter import OneEuroFilter
 
@@ -82,7 +84,7 @@ files = [
 ]
 
 start_frame = 600
-end_frame = 1800
+end_frame = 1200
 
 cam1_points = parse_landmarks_csv(files[0], start_frame, end_frame)
 cam2_points = parse_landmarks_csv(files[1], start_frame, end_frame)
@@ -126,10 +128,9 @@ for t in range(frame_count):
 # Build camera dicts for visualization
 cameras_vis = []
 for cam in [cam_1, cam_2, cam_3]:
-    if cam.projection_matrix:
-        K, R, center = decompose_projection_matrix(cam.projection_matrix)
+    K, R, center = decompose_projection_matrix(cam.projection_matrix)
     # R is world-to-camera; R.T columns are camera's local axes in world coords
-        cameras_vis.append({"label": cam.name, "position": center, "rotation": R.T})
+    cameras_vis.append({"label": cam.name, "position": center, "rotation": R.T})
 
 if triangulated_points:
     plot_sequence(

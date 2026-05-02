@@ -278,6 +278,7 @@ def plot_sequence(
     axis_length=_AXIS_LEN,
     start_frame=0,
     trail_keypoint=0,
+    frame_duration=33,
 ):
     """
     Interactive Plotly visualization with a slider to step through
@@ -303,6 +304,9 @@ def plot_sequence(
 
     trail_keypoint : int
         Index (0–16) of the keypoint whose path is drawn as a trail.
+
+    frame_duration : int
+        Milliseconds per frame during playback. Lower = faster (default 100).
     """
     global _AXIS_LEN
     _AXIS_LEN = axis_length
@@ -454,7 +458,7 @@ def plot_sequence(
             xanchor="center",
             buttons=[
                 dict(label="Play", method="animate",
-                     args=[None, dict(frame=dict(duration=100, redraw=True), fromcurrent=True)]),
+                     args=[None, dict(frame=dict(duration=frame_duration, redraw=True), fromcurrent=True)]),
                 dict(label="Pause", method="animate",
                      args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")]),
             ],
