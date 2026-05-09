@@ -51,13 +51,14 @@ def parse_landmarks_csv(filepath, start_frame, end_frame):
             count += 1
     return points
 
-def filter(point: Point3D, timestamp: float) -> Point3D:
+def filter(point: Point3D, timestamp: float, filters: list) -> Point3D:
     """
     Apply a One Euro Filter to the 3D point to smooth it over time.
+    filters: [filter_x, filter_y, filter_z]
     """
-    x = euro_filer(point.x, timestamp)
-    y = euro_filer(point.y, timestamp)
-    z = euro_filer(point.z, timestamp)
+    x = filters[0](point.x, timestamp)
+    y = filters[1](point.y, timestamp)
+    z = filters[2](point.z, timestamp)
     return Point3D(x, y, z)
 
 # Need to impot our camera matrices.
@@ -83,8 +84,8 @@ files = [
     os.path.join(LANDMARKS_DIR, "cam_3_pose_landmarks2.csv"),
 ]
 
-start_frame = 600
-end_frame = 700
+start_frame = 900
+end_frame = 1800
 USE_CONFIDENCE_WEIGHTS = True
 
 cam1_points = parse_landmarks_csv(files[0], start_frame, end_frame)
@@ -99,7 +100,11 @@ frame_count = end_frame - start_frame
 index = 3
 
 triangulated_points = []
-euro_filer = OneEuroFilter(freq=30, mincutoff=1.0, beta=0.0)  # Adjust parameters as needed
+# One filter per axis per keypoint so each signal has independent state
+euro_filters = [
+    [OneEuroFilter(freq=30, mincutoff=1.0, beta=0.0) for _ in range(3)]
+    for _ in range(NUM_KEYPOINTS)
+]
 for t in range(frame_count):
     if cam1_points[t] is None or cam2_points[t] is None or cam3_points[t] is None:
         print(f"Skipping frame {t}: missing keypoints in one or more cameras")
@@ -107,6 +112,7 @@ for t in range(frame_count):
         continue
 
     frame_3d = []
+    raw_frame_3d = []
     for kp_idx in range(NUM_KEYPOINTS):
         cam1_kp = cam1_points[t][kp_idx]  # [x, y, conf]
         cam2_kp = cam2_points[t][kp_idx]
@@ -121,15 +127,18 @@ for t in range(frame_count):
 
         try:
             point_3d = triangulate(kp_undistorted, projection_matrices, weights=weights)
-            filtered_point_3d = filter(point_3d, timestamp=t/30)  # Assuming 30 FPS
-            frame_3d.append(point_3d)
+            filtered_point_3d = filter(point_3d, timestamp=t/30, filters=euro_filters[kp_idx])  # Assuming 30 FPS
+            frame_3d.append(filtered_point_3d)
+            raw_frame_3d.append(point_3d)
         except Exception as e:
             print(f"Error triangulating keypoint {kp_idx} at frame {t}")
             print(f"Exception: {e}")
             frame_3d.append(None)
+            raw_frame_3d.append(None)
 
     print(f"Triangulated frame {t}: kp{index}={frame_3d[index]}")
     triangulated_points.append(frame_3d)
+    # raw_triangulated_points.append(raw_frame_3d)
 
 # Build camera dicts for visualization
 cameras_vis = []
