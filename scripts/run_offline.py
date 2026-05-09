@@ -45,7 +45,7 @@ def parse_landmarks_csv(filepath, start_frame, end_frame):
                     points.append(None)
                 else:
                     points.append([
-                        [float(col.split(",")[0][3:]), float(col.split(",")[1][4:])]
+                        [float(col.split(",")[0][3:]), float(col.split(",")[1][4:]), float(col.split(",")[2][7:])]
                         for col in kp_cols
                     ])
             count += 1
@@ -84,7 +84,8 @@ files = [
 ]
 
 start_frame = 600
-end_frame = 1200
+end_frame = 700
+USE_CONFIDENCE_WEIGHTS = True
 
 cam1_points = parse_landmarks_csv(files[0], start_frame, end_frame)
 cam2_points = parse_landmarks_csv(files[1], start_frame, end_frame)
@@ -107,14 +108,19 @@ for t in range(frame_count):
 
     frame_3d = []
     for kp_idx in range(NUM_KEYPOINTS):
-        kp_array = np.array([cam1_points[t][kp_idx], cam2_points[t][kp_idx], cam3_points[t][kp_idx]])
-        cam1_kp_undistorted = undistort_points(kp_array[0].reshape(1, 2), cam_1.camera_matrix, cam_1.distortion_coefficients)
-        cam2_kp_undistorted = undistort_points(kp_array[1].reshape(1, 2), cam_2.camera_matrix, cam_2.distortion_coefficients)
-        cam3_kp_undistorted = undistort_points(kp_array[2].reshape(1, 2), cam_3.camera_matrix, cam_3.distortion_coefficients)
+        cam1_kp = cam1_points[t][kp_idx]  # [x, y, conf]
+        cam2_kp = cam2_points[t][kp_idx]
+        cam3_kp = cam3_points[t][kp_idx]
+
+        weights = np.array([cam1_kp[2], cam2_kp[2], cam3_kp[2]]) if USE_CONFIDENCE_WEIGHTS else None
+
+        cam1_kp_undistorted = undistort_points(np.array([[cam1_kp[0], cam1_kp[1]]]), cam_1.camera_matrix, cam_1.distortion_coefficients)
+        cam2_kp_undistorted = undistort_points(np.array([[cam2_kp[0], cam2_kp[1]]]), cam_2.camera_matrix, cam_2.distortion_coefficients)
+        cam3_kp_undistorted = undistort_points(np.array([[cam3_kp[0], cam3_kp[1]]]), cam_3.camera_matrix, cam_3.distortion_coefficients)
         kp_undistorted = np.array([cam1_kp_undistorted[0], cam2_kp_undistorted[0], cam3_kp_undistorted[0]])
 
         try:
-            point_3d = triangulate(kp_undistorted, projection_matrices)
+            point_3d = triangulate(kp_undistorted, projection_matrices, weights=weights)
             filtered_point_3d = filter(point_3d, timestamp=t/30)  # Assuming 30 FPS
             frame_3d.append(point_3d)
         except Exception as e:
