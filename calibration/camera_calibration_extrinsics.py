@@ -1,13 +1,19 @@
 import time
 import os
 import sys
+import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import CALIBRATION_DIR
+from config import CALIBRATION_DIR, CAMERA_INDICES
 import numpy as np
 import cv2 as cv
 import glob
 import pickle
 import sys
+
+parser = argparse.ArgumentParser(description='Compute extrinsic calibration for a camera.')
+parser.add_argument('cam_number', type=int, help='Camera number (e.g. 1, 2, 3)')
+args = parser.parse_args()
+cam_num = f'cam{args.cam_number}'
 
 # STEPS TO FIND EXTRINSICS #
 # 1. Load the camera matrix and distortion coefficients
@@ -23,15 +29,10 @@ import sys
 # 1. Convert the rotation vector to a rotation matrix
 # 2. Use matplotlib to plot the camera position
 
-cam_num = 'cam1'
-# cam_matrix_file_path = 'Camera_Calibration/cam1/cameraMatrix.pkl'
 calibration_file_path = f'{CALIBRATION_DIR}/{cam_num}/calibration.pkl'
-# distortion_file_path = 'Camera_Calibration/cam1/dist.pkl'
 image = None
 # cam 1,2,3
-cap = cv.VideoCapture(1)
-# cap = cv.VideoCapture(0)
-# cap = cv.VideoCapture(3)
+cap = cv.VideoCapture(CAMERA_INDICES[args.cam_number - 1])
 
 while cap.isOpened():
     ret, img = cap.read()
@@ -133,4 +134,4 @@ for pt in projected_points:
 cv.imshow('img', image)
 cv.waitKey(0)
 
-pickle.dump(P, open(f'Camera_Calibration/{cam_num}/projection_matrix.pkl', 'wb'))
+pickle.dump(P, open(f'{CALIBRATION_DIR}/{cam_num}/projection_matrix.pkl', 'wb'))

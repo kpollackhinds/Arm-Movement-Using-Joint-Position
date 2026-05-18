@@ -4,8 +4,14 @@ import glob
 import pickle
 import sys
 import os
+import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import CALIBRATION_DIR
+
+parser = argparse.ArgumentParser(description='Compute intrinsic calibration for a camera.')
+parser.add_argument('cam_index', type=int, help='Camera number (e.g. 1, 2, 3)')
+args = parser.parse_args()
+cam_dir = f'cam{args.cam_index}'
 
 print(cv.__version__)
 ################ FIND CHESSBOARD CORNERS - OBJECT POINTS AND IMAGE POINTS #############################
@@ -34,7 +40,7 @@ objpoints = [] # 3d point in real world space
 imgpoints = [] # 2d points in image plane.
 
 
-images = glob.glob(f'{CALIBRATION_DIR}/cam3/images/*.png')
+images = glob.glob(f'{CALIBRATION_DIR}/{cam_dir}/images/*.png')
 print("Number of images found: ", len(images))
 for image in images:
 
@@ -80,9 +86,9 @@ print("Distortion Coefficients:\n")
 print(dist)
 
 # # Save the camera calibration result for later use (we won't worry about rvecs / tvecs)
-pickle.dump((cameraMatrix, dist), open(f"{CALIBRATION_DIR}/cam3/calibration.pkl", "wb"))
-pickle.dump(cameraMatrix, open(f"{CALIBRATION_DIR}/cam3/cameraMatrix.pkl", "wb"))
-pickle.dump(dist, open(f"{CALIBRATION_DIR}/cam3/dist.pkl", "wb"))
+pickle.dump((cameraMatrix, dist), open(f"{CALIBRATION_DIR}/{cam_dir}/calibration.pkl", "wb"))
+pickle.dump(cameraMatrix, open(f"{CALIBRATION_DIR}/{cam_dir}/cameraMatrix.pkl", "wb"))
+pickle.dump(dist, open(f"{CALIBRATION_DIR}/{cam_dir}/dist.pkl", "wb"))
 
 
 ############## UNDISTORTION #####################################################
