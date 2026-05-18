@@ -1,477 +1,273 @@
+"""3-D pose visualisation using Rerun (https://rerun.io/).
+
+Public API is compatible with plotting_plotly.py:
+    plot_scene(cameras, point_3d, *, keypoints, title, axis_length, show, return_fig)
+    plot_sequence(cameras, points_3d, *, title, axis_length, start_frame,
+                  trail_keypoints, frame_duration)
+
+Install:  pip install rerun-sdk
+"""
+
+from typing import Union
+
 import numpy as np
-import plotly.graph_objects as go
+import rerun as rr
+import rerun.blueprint as rrb
+
+from inference.yolov11.keypoint_mapping import KEYPOINT_MAPPING
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 
-_AXIS_LEN   = 20   # length of the orientation axes drawn per camera
-_RAY_ALPHA  = 0.4    # opacity of rays from cameras to the triangulated point
-_CAM_COLOR  = "#00BFFF"
-_POINT_COLOR = "#FF4500"
-_AXIS_COLORS = {"x": "#FF4136", "y": "#2ECC40", "z": "#0074D9"}  # R G B
+_AXIS_LEN    = 20
+_CAM_COLOR   = [0, 191, 255]    # #00BFFF
+_POINT_COLOR = [255, 69, 0]     # #FF4500
+_AXIS_COLORS = {
+    "x": [255, 65, 54],         # #FF4136
+    "y": [46, 204, 64],         # #2ECC40
+    "z": [0, 116, 217],         # #0074D9
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _to_array(v):
+def _to_array(v) -> np.ndarray:
     return np.array(v, dtype=float)
 
 
-def _rotation_to_axes(R):
-    """
-    Given a 3×3 rotation matrix R whose *columns* are the camera's local
-    x, y, z axes expressed in world coordinates, return those three axes.
-    """
+def _rotation_to_axes(R) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     R = _to_array(R)
     if R.shape != (3, 3):
         raise ValueError(f"rotation must be a 3×3 matrix, got shape {R.shape}")
-    # Columns: R[:,0]=x-axis, R[:,1]=y-axis, R[:,2]=z-axis (forward)
     return R[:, 0], R[:, 1], R[:, 2]
 
 
-def _make_camera_traces(cam_idx, position, rotation, point):
-    """Return a list of Plotly traces for a single camera."""
-    pos = _to_array(position)
-    traces = []
-
-    # ── Orientation axes ──────────────────────────────────────────────────────
-    x_ax, y_ax, z_ax = _rotation_to_axes(rotation)
-    for ax_vec, ax_name, color in [
-        (x_ax, "x", _AXIS_COLORS["x"]),
-        (y_ax, "y", _AXIS_COLORS["y"]),
-        (z_ax, "z", _AXIS_COLORS["z"]),
+def _log_world_frame(axis_length: float) -> None:
+    """Log RGB XYZ world-frame arrows at the origin as static (timeless) data."""
+    for vec, name, color in [
+        (np.array([1.0, 0.0, 0.0]), "x", _AXIS_COLORS["x"]),
+        (np.array([0.0, 1.0, 0.0]), "y", _AXIS_COLORS["y"]),
+        (np.array([0.0, 0.0, 1.0]), "z", _AXIS_COLORS["z"]),
     ]:
-        end = pos + ax_vec * _AXIS_LEN
-        traces.append(go.Scatter3d(
-            x=[pos[0], end[0]],
-            y=[pos[1], end[1]],
-            z=[pos[2], end[2]],
-            mode="lines",
-            line=dict(color=color, width=8),
-            name=f"cam{cam_idx} {ax_name}-axis",
-            legendgroup=f"cam{cam_idx}_axes",
-            showlegend=(ax_name == "x"),   # one legend entry per camera
-        ))
-
-    # ── Ray to triangulated point ─────────────────────────────────────────────
-    if point is not None:
-        pt = _to_array(point)
-        traces.append(go.Scatter3d(
-            x=[pos[0], pt[0]],
-            y=[pos[1], pt[1]],
-            z=[pos[2], pt[2]],
-            mode="lines",
-            line=dict(color=_CAM_COLOR, width=1.5, dash="dot"),
-            opacity=_RAY_ALPHA,
-            name=f"cam{cam_idx} ray",
-            legendgroup=f"cam{cam_idx}_ray",
-            showlegend=True,
-        ))
-
-    # ── Camera marker ─────────────────────────────────────────────────────────
-    traces.append(go.Scatter3d(
-        x=[pos[0]], y=[pos[1]], z=[pos[2]],
-        mode="markers+text",
-        marker=dict(size=1, color=_CAM_COLOR, symbol="square"),
-        text=[f"cam{cam_idx}"],
-        textposition="top center",
-        textfont=dict(size=11, color=_CAM_COLOR),
-        name=f"cam{cam_idx}",
-        legendgroup=f"cam{cam_idx}",
-        showlegend=True,
-    ))
-
-    return traces
-
-
-def _make_world_frame_traces(axis_length):
-    """Return traces for a world coordinate frame at the origin (RGB = XYZ)."""
-    traces = []
-    origin = np.zeros(3)
-    axes = [
-        (np.array([1, 0, 0]), "X", _AXIS_COLORS["x"]),
-        (np.array([0, 1, 0]), "Y", _AXIS_COLORS["y"]),
-        (np.array([0, 0, 1]), "Z", _AXIS_COLORS["z"]),
-    ]
-    for direction, label, color in axes:
-        end = origin + direction * axis_length
-        traces.append(go.Scatter3d(
-            x=[0, end[0]], y=[0, end[1]], z=[0, end[2]],
-            mode="lines+text",
-            line=dict(color=color, width=10),
-            text=["", label],
-            textposition="top center",
-            textfont=dict(size=16, color=color),
-            name=f"world {label}",
-            legendgroup="world_frame",
-            showlegend=(label == "X"),
-        ))
-    return traces
-
-
-# ── Public API ────────────────────────────────────────────────────────────────
-
-def plot_scene(
-    cameras,
-    point_3d=None,
-    *,
-    title="3D Triangulation Scene",
-    axis_length=_AXIS_LEN,
-    show=True,
-    return_fig=False,
-):
-    """
-    Plot cameras and an optional triangulated 3-D point.
-
-    Parameters
-    ----------
-    cameras : list of dict
-        Each dict must have:
-            "position"  — array-like (3,)      world-space origin
-            "rotation"  — array-like (3, 3)    rotation matrix
-                          columns = camera local x, y, z in world coords
-                          (i.e. R such that p_world = R @ p_cam + t)
-        Optional keys:
-            "label"     — str, overrides the default "cam{i}" label
-
-    point_3d : array-like (3,) or None
-        The triangulated 3-D point to display.
-
-    title : str
-        Plot title.
-
-    axis_length : float
-        Length of the orientation axes drawn at each camera. Tune this to
-        match the scale of your scene.
-
-    show : bool
-        Call fig.show() automatically (opens browser / notebook widget).
-
-    return_fig : bool
-        Return the Plotly Figure object for further customisation.
-
-    Returns
-    -------
-    plotly.graph_objects.Figure  (only if return_fig=True)
-
-    Examples
-    --------
-    # Minimal — cameras only
-    plot_scene([
-        {"position": [0, 0, 0], "rotation": np.eye(3)},
-        {"position": [1, 0, 0], "rotation": np.eye(3)},
-    ])
-
-    # With triangulated point
-    plot_scene(cameras, point_3d=[0.5, 0.2, 1.8])
-    """
-    global _AXIS_LEN
-    _AXIS_LEN = axis_length
-
-    all_traces = []
-
-    # ── World reference frame at origin ───────────────────────────────────────
-    all_traces.extend(_make_world_frame_traces(axis_length * 2))
-
-    for i, cam in enumerate(cameras):
-        label = cam.get("label", str(i))
-        traces = _make_camera_traces(
-            cam_idx=label,
-            position=cam["position"],
-            rotation=cam["rotation"],
-            point=point_3d,
+        rr.log(
+            f"world/{name}_axis",
+            rr.Arrows3D(origins=[[0.0, 0.0, 0.0]], vectors=[vec * axis_length], colors=[color]),
+            static=True,
         )
-        all_traces.extend(traces)
-
-    # ── Triangulated point ────────────────────────────────────────────────────
-    if point_3d is not None:
-        pt = _to_array(point_3d)
-        all_traces.append(go.Scatter3d(
-            x=[pt[0]], y=[pt[1]], z=[pt[2]],
-            mode="markers+text",
-            marker=dict(size=1, color=_POINT_COLOR, symbol="circle"),
-            text=["3D point"],
-            textposition="top center",
-            textfont=dict(size=12, color=_POINT_COLOR),
-            name="triangulated point",
-            showlegend=True,
-        ))
-
-    # ── Layout ────────────────────────────────────────────────────────────────
-    fig = go.Figure(data=all_traces)
-    fig.update_layout(
-        title=dict(text=title, font=dict(size=16)),
-        scene=dict(
-            xaxis=dict(title="X", backgroundcolor="#111", gridcolor="#333", showbackground=True),
-            yaxis=dict(title="Y", backgroundcolor="#111", gridcolor="#333", showbackground=True),
-            zaxis=dict(title="Z", backgroundcolor="#111", gridcolor="#333", showbackground=True),
-            bgcolor="#111111",
-            aspectmode="data",   # preserves true proportions — important for sanity-checking
-        ),
-        paper_bgcolor="#1a1a1a",
-        plot_bgcolor="#1a1a1a",
-        font=dict(color="#cccccc"),
-        legend=dict(bgcolor="#222", bordercolor="#444", borderwidth=1),
-        margin=dict(l=0, r=0, t=40, b=0),
-    )
-
-    if show:
-        fig.show()
-
-    if return_fig:
-        return fig
 
 
-def plot_sequence(
-    cameras,
-    points_3d,
-    *,
-    title="3D Triangulation Sequence",
-    axis_length=_AXIS_LEN,
-    start_frame=0,
-):
-    """
-    Interactive Plotly visualization with a slider to step through
-    triangulated 3D points frame by frame.
-
-    Parameters
-    ----------
-    cameras : list of dict
-        Same format as plot_scene — each dict has "position", "rotation",
-        and optionally "label".
-
-    points_3d : list of array-like (3,)
-        One triangulated 3D point per frame.
-
-    title : str
-        Plot title.
-
-    axis_length : float
-        Length of orientation axes at each camera.
-
-    start_frame : int
-        Frame number offset for labelling (so slider shows actual frame numbers).
-    """
-    global _AXIS_LEN
-    _AXIS_LEN = axis_length
-
-    # Build static traces (world frame + cameras)
-    cam_traces = []
-
-    # ── World reference frame at origin ───────────────────────────────────────
-    cam_traces.extend(_make_world_frame_traces(axis_length * 2))
-
+def _log_cameras(cameras: list[dict], axis_length: float) -> None:
+    """Log camera positions and orientation axes as static (timeless) data."""
     for cam in cameras:
         label = cam.get("label", "cam")
-        # Camera marker
         pos = _to_array(cam["position"])
-        cam_traces.append(go.Scatter3d(
-            x=[pos[0]], y=[pos[1]], z=[pos[2]],
-            mode="markers+text",
-            marker=dict(size=6, color=_CAM_COLOR, symbol="square"),
-            text=[label],
-            textposition="top center",
-            textfont=dict(size=11, color=_CAM_COLOR),
-            name=label,
-            showlegend=True,
-        ))
-        # Orientation axes
         x_ax, y_ax, z_ax = _rotation_to_axes(cam["rotation"])
+        path = f"cameras/{label}"
+
+        rr.log(f"{path}/position", rr.Points3D([pos], colors=[_CAM_COLOR]), static=True)
+
         for ax_vec, ax_name, color in [
             (x_ax, "x", _AXIS_COLORS["x"]),
             (y_ax, "y", _AXIS_COLORS["y"]),
             (z_ax, "z", _AXIS_COLORS["z"]),
         ]:
-            end = pos + ax_vec * _AXIS_LEN
-            cam_traces.append(go.Scatter3d(
-                x=[pos[0], end[0]], y=[pos[1], end[1]], z=[pos[2], end[2]],
-                mode="lines",
-                line=dict(color=color, width=8),
-                showlegend=False,
-            ))
-
-    num_cam_traces = len(cam_traces)
-
-    # The point trace + ray traces that will be updated per frame
-    # We need: 1 point marker + 1 ray per camera + 1 trail trace
-    # Initial frame
-    pt0 = _to_array(points_3d[0])
-
-    # Point marker
-    point_trace = go.Scatter3d(
-        x=[pt0[0]], y=[pt0[1]], z=[pt0[2]],
-        mode="markers+text",
-        marker=dict(size=1, color=_POINT_COLOR, symbol="circle"),
-        text=[f"frame {start_frame}"],
-        textposition="top center",
-        textfont=dict(size=12, color=_POINT_COLOR),
-        name="3D point",
-        showlegend=True,
-    )
-
-    # Rays from each camera to the point
-    ray_traces = []
-    for cam in cameras:
-        pos = _to_array(cam["position"])
-        ray_traces.append(go.Scatter3d(
-            x=[pos[0], pt0[0]], y=[pos[1], pt0[1]], z=[pos[2], pt0[2]],
-            mode="lines",
-            line=dict(color=_CAM_COLOR, width=1.5, dash="dot"),
-            opacity=_RAY_ALPHA,
-            showlegend=False,
-        ))
-
-    # Trail of all points seen so far
-    trail_trace = go.Scatter3d(
-        x=[pt0[0]], y=[pt0[1]], z=[pt0[2]],
-        mode="markers",
-        marker=dict(size=3, color=_POINT_COLOR, opacity=0.3),
-        name="trail",
-        showlegend=True,
-    )
-
-    all_traces = cam_traces + [point_trace] + ray_traces + [trail_trace]
-    fig = go.Figure(data=all_traces)
-
-    # Build frames for the slider
-    frames = []
-    for i, pt in enumerate(points_3d):
-        pt = _to_array(pt)
-        frame_num = start_frame + i
-
-        # Trail: all points up to and including this frame
-        trail_pts = np.array([_to_array(p) for p in points_3d[:i+1]])
-
-        frame_data = []
-        # Update point marker
-        frame_data.append(go.Scatter3d(
-            x=[pt[0]], y=[pt[1]], z=[pt[2]],
-            mode="markers+text",
-            marker=dict(size=2, color=_POINT_COLOR, symbol="circle"),
-            text=[f"frame {frame_num}"],
-            textposition="top center",
-            textfont=dict(size=12, color=_POINT_COLOR),
-        ))
-        # Update rays
-        for cam in cameras:
-            pos = _to_array(cam["position"])
-            frame_data.append(go.Scatter3d(
-                x=[pos[0], pt[0]], y=[pos[1], pt[1]], z=[pos[2], pt[2]],
-                mode="lines",
-                line=dict(color=_CAM_COLOR, width=1.5, dash="dot"),
-                opacity=_RAY_ALPHA,
-            ))
-        # Update trail
-        frame_data.append(go.Scatter3d(
-            x=trail_pts[:, 0].tolist(),
-            y=trail_pts[:, 1].tolist(),
-            z=trail_pts[:, 2].tolist(),
-            mode="markers",
-            marker=dict(size=3, color=_POINT_COLOR, opacity=0.3),
-        ))
-
-        # Trace indices to update: point + rays + trail (after cam_traces)
-        trace_indices = list(range(num_cam_traces, num_cam_traces + 1 + len(cameras) + 1))
-
-        frames.append(go.Frame(
-            data=frame_data,
-            traces=trace_indices,
-            name=str(frame_num),
-        ))
-
-    fig.frames = frames
-
-    # Slider
-    sliders = [dict(
-        active=0,
-        currentvalue=dict(prefix="Frame: ", font=dict(size=14)),
-        pad=dict(b=10, t=40),
-        steps=[
-            dict(
-                args=[[str(start_frame + i)], dict(frame=dict(duration=0, redraw=True), mode="immediate")],
-                label=str(start_frame + i),
-                method="animate",
+            rr.log(
+                f"{path}/{ax_name}_axis",
+                rr.Arrows3D(origins=[pos], vectors=[ax_vec * axis_length], colors=[color]),
+                static=True,
             )
-            for i in range(len(points_3d))
-        ],
-    )]
-
-    fig.update_layout(
-        title=dict(text=title, font=dict(size=16)),
-        sliders=sliders,
-        updatemenus=[dict(
-            type="buttons",
-            showactive=False,
-            y=1.15,
-            x=0.5,
-            xanchor="center",
-            buttons=[
-                dict(label="Play", method="animate",
-                     args=[None, dict(frame=dict(duration=100, redraw=True), fromcurrent=True)]),
-                dict(label="Pause", method="animate",
-                     args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")]),
-            ],
-        )],
-        scene=dict(
-            xaxis=dict(title="X", backgroundcolor="#111", gridcolor="#333", showbackground=True),
-            yaxis=dict(title="Y", backgroundcolor="#111", gridcolor="#333", showbackground=True),
-            zaxis=dict(title="Z", backgroundcolor="#111", gridcolor="#333", showbackground=True),
-            bgcolor="#111111",
-            aspectmode="data",
-        ),
-        paper_bgcolor="#1a1a1a",
-        plot_bgcolor="#1a1a1a",
-        font=dict(color="#cccccc"),
-        legend=dict(bgcolor="#222", bordercolor="#444", borderwidth=1),
-        margin=dict(l=0, r=0, t=40, b=0),
-    )
-
-    fig.show()
 
 
-# ── Quick sanity-check scene (run this file directly) ────────────────────────
+def _log_pose(
+    keypoints_3d: list,
+    entity_prefix: str = "pose",
+    static: bool = False,
+) -> None:
+    """Log keypoint markers and skeleton line strips at the current time."""
+    valid_pts = [_to_array(kp) for kp in keypoints_3d if kp is not None]
+    if valid_pts:
+        rr.log(
+            f"{entity_prefix}/keypoints",
+            rr.Points3D(valid_pts, colors=[_POINT_COLOR]),
+            static=static,
+        )
 
-if __name__ == "__main__":
-    def _Ry(deg):
-        """Rotation matrix around Y axis."""
-        t = np.radians(deg)
-        return np.array([
-            [ np.cos(t), 0, np.sin(t)],
-            [         0, 1,         0],
-            [-np.sin(t), 0, np.cos(t)],
-        ])
+    strips = []
+    for a, b in KEYPOINT_MAPPING:
+        if keypoints_3d[a] is not None and keypoints_3d[b] is not None:
+            strips.append([_to_array(keypoints_3d[a]), _to_array(keypoints_3d[b])])
+    if strips:
+        rr.log(
+            f"{entity_prefix}/skeleton",
+            rr.LineStrips3D(strips, colors=[_POINT_COLOR]),
+            static=static,
+        )
 
-    def _Rx(deg):
-        t = np.radians(deg)
-        return np.array([
-            [1,         0,          0],
-            [0, np.cos(t), -np.sin(t)],
-            [0, np.sin(t),  np.cos(t)],
-        ])
 
-    # Three cameras arranged in an arc, all loosely pointing toward the origin
-    demo_cameras = [
-        {
-            "label": "left",
-            "position": [-1.0, 0.2, 0.5],
-            "rotation": _Ry(-30),
-        },
-        {
-            "label": "center",
-            "position": [0.0, 0.3, -1.2],
-            "rotation": np.eye(3),
-        },
-        {
-            "label": "right",
-            "position": [1.0, 0.2, 0.5],
-            "rotation": _Ry(30),
-        },
-    ]
+# ── Public API ────────────────────────────────────────────────────────────────
 
-    demo_point = [0.05, 0.1, 0.0]
+def plot_scene(
+    cameras: list[dict],
+    point_3d: np.ndarray | list | None = None,
+    *,
+    keypoints: list[np.ndarray | None] | None = None,
+    title: str = "3D Triangulation Scene",
+    axis_length: float = _AXIS_LEN,
+    show: bool = True,
+    return_fig: bool = False,
+) -> None:
+    """
+    Plot cameras and an optional triangulated 3-D point using Rerun.
 
-    plot_scene(
-        demo_cameras,
-        point_3d=demo_point,
-        title="Demo — 3 cameras + triangulated point",
-        axis_length=0.2,
-    )
+    Parameters
+    ----------
+    cameras : list of dict
+        Each dict must have "position" (array-like (3,)) and "rotation" (3×3 matrix).
+        Columns of rotation = camera local x, y, z in world coords.
+        Optional key: "label" (str).
+    point_3d : array-like (3,) or None
+        A single triangulated point to display.
+    keypoints : list of array-like (3,) or None, optional
+        Pose keypoints; takes priority over point_3d.
+    title : str
+        Rerun application / recording name (shown in the viewer title bar).
+    axis_length : float
+        Length of orientation axes at each camera and the world frame.
+    show : bool
+        Spawn the Rerun viewer automatically.
+    return_fig : bool
+        Not used (Rerun has no figure object). Kept for API compatibility.
+    """
+    rr.init(title)
+    if show:
+        rr.spawn()
+
+    _log_world_frame(axis_length * 2)
+    _log_cameras(cameras, axis_length)
+
+    if keypoints is not None:
+        _log_pose(keypoints, static=True)
+    elif point_3d is not None:
+        pt = _to_array(point_3d)
+        rr.log("pose/point", rr.Points3D([pt], colors=[_POINT_COLOR]), static=True)
+
+
+def plot_sequence(
+    cameras: list[dict],
+    points_3d: list[list[np.ndarray | None] | None],
+    *,
+    raw_points_3d: list[list[np.ndarray | None] | None] | None = None,
+    title: str = "3D Triangulation Sequence",
+    axis_length: float = _AXIS_LEN,
+    start_frame: int = 0,
+    trail_keypoints: list[int] | None = None,
+    frame_duration: int = 33,
+) -> None:
+    """
+    Visualise a pose sequence frame by frame using Rerun.
+
+    The Rerun viewer's timeline is stamped with real wall-clock timestamps
+    derived from frame_duration so that 1× playback matches the original
+    video speed (e.g. frame_duration=33 ms → ~30 FPS).
+
+    Parameters
+    ----------
+    cameras : list of dict
+        Same format as plot_scene.
+    points_3d : list of (list of 17 array-like (3,)) or None
+        The primary (e.g. filtered) keypoints. One entry per frame.
+    raw_points_3d : list of (list of 17 array-like (3,)) or None, optional
+        If provided, enables side-by-side comparison mode. These are logged
+        as the baseline/raw skeleton alongside points_3d (the filtered one).
+    title : str
+        Rerun application / recording name.
+    axis_length : float
+        Length of orientation axes at each camera.
+    start_frame : int
+        Frame number offset for the timeline labels.
+    trail_keypoints : list[int] or None
+        Indices of keypoints whose accumulating paths are drawn as trails.
+        Empty list / None = no trails.
+    frame_duration : int
+        Milliseconds between frames. Used to stamp real timestamps so Rerun
+        plays back at the correct speed. Default 33 ≈ 30 FPS.
+    """
+    if trail_keypoints is None:
+        trail_keypoints = []
+
+    comparison_mode = raw_points_3d is not None
+    fps = 1000.0 / frame_duration
+
+    rr.init(title)
+
+    # ── Blueprint: side-by-side when comparison mode is on ────────────────────
+    static_contents = ["world/**", "cameras/**"]
+    if comparison_mode:
+        blueprint = rrb.Blueprint(
+            rrb.Horizontal(
+                rrb.Spatial3DView(
+                    name="Raw",
+                    origin="/",
+                    contents=static_contents + ["pose/raw/**"],
+                ),
+                rrb.Spatial3DView(
+                    name="Filtered",
+                    origin="/",
+                    contents=static_contents + ["pose/filtered/**"],
+                ),
+            )
+        )
+        rr.send_blueprint(blueprint)
+
+    rr.spawn()
+
+    # Static geometry: world frame + cameras
+    _log_world_frame(axis_length * 2)
+    _log_cameras(cameras, axis_length)
+
+    # Per-keypoint trail accumulators (one set per view in comparison mode)
+    trail_acc: dict[int, list[np.ndarray]] = {k: [] for k in trail_keypoints}
+    raw_trail_acc: dict[int, list[np.ndarray]] = {k: [] for k in trail_keypoints}
+
+    for i, frame_kps in enumerate(points_3d):
+        frame_num = start_frame + i
+        raw_kps = raw_points_3d[i] if comparison_mode else None
+
+        # Stamp both a sequence index and a real-time timestamp
+        rr.set_time("frame", sequence=frame_num)
+        rr.set_time("time", duration=frame_num / fps)
+
+        # Choose entity prefix depending on mode
+        prefix = "pose/filtered" if comparison_mode else "pose"
+
+        # Accumulate and log trails for the primary (filtered) skeleton
+        for k in trail_keypoints:
+            if frame_kps is not None and frame_kps[k] is not None:
+                trail_acc[k].append(_to_array(frame_kps[k]))
+            if trail_acc[k]:
+                rr.log(
+                    f"{prefix}/trail/kp{k}",
+                    rr.Points3D(trail_acc[k], colors=[[*_POINT_COLOR, 77]]),
+                )
+
+        if frame_kps is not None:
+            _log_pose(frame_kps, entity_prefix=prefix)
+        else:
+            rr.log(f"{prefix}/keypoints", rr.Clear(recursive=False))
+            rr.log(f"{prefix}/skeleton", rr.Clear(recursive=False))
+
+        # ── Raw skeleton (comparison mode only) ───────────────────────────────
+        if comparison_mode:
+            for k in trail_keypoints:
+                if raw_kps is not None and raw_kps[k] is not None:
+                    raw_trail_acc[k].append(_to_array(raw_kps[k]))
+                if raw_trail_acc[k]:
+                    rr.log(
+                        f"pose/raw/trail/kp{k}",
+                        rr.Points3D(raw_trail_acc[k], colors=[[*_POINT_COLOR, 77]]),
+                    )
+
+            if raw_kps is not None:
+                _log_pose(raw_kps, entity_prefix="pose/raw")
+            else:
+                rr.log("pose/raw/keypoints", rr.Clear(recursive=False))
+                rr.log("pose/raw/skeleton", rr.Clear(recursive=False))
