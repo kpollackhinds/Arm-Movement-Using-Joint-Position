@@ -82,7 +82,56 @@ python triangulation.py
 
 
 ## Math
-Here are the details
-### Additional Considerations
+Here are the details:
+
+Given a point in the world frame (3D space) X, its 2D projection in the image frame x can be given by the relation 
+$$
+x ~ PX
+$$
+Where P is a projection matrix. This projection results in homogenous coordinates, so $x$ and $PX$ represent the same point up to scale:
+$$
+x = \lambda PX
+$$
+Because $x$ and $PX$ are scalar multiples, we can define the constraint:
+$$
+x  \times PX = 0 
+$$
+Expanding further we get
+$$
+
+\begin{bmatrix} u \\ v \\ 1 \end{bmatrix}
+\times
+\left(
+\begin{bmatrix} p_{11} & p_{12} & p_{13} & t_1 \\ p_{21} & p_{22} & p_{23} & t_2 \\ p_{31} & p_{32} & p_{33} & t_3 \end{bmatrix}
+\begin{bmatrix} X \\ Y \\ Z \\ 1 \end{bmatrix}
+\right) = \mathbf{0}
+$$
+
+If we represent P as $\begin{bmatrix} P_1 \\ P_2 \\ P_3 \end{bmatrix}$, the right operand can be written as $\begin{bmatrix} P_1^TX \\ P_2^TX \\ P_3^TX \end{bmatrix}$. Completing the cross product, and factoring out X results in:
+
+$$
+\begin{bmatrix} vP_3^T - P_2^T \\ P_1^T - uP_3^T \\ uP_2^T - vP_1^T \end{bmatrix} X = \mathbf{0}
+$$
+
+The third row is a linear combination of the first two rows, leaving us with two constraints with which to build the DLT equation:
+
+$$
+AX = \mathbf{0}, \quad A \in \mathbb{R}^{2 \times 4}
+$$
+
+We can use SVD to solve the following:
+$$
+\left.\begin{matrix} \text{cam } 1 \\ \vdots \\ \text{cam } n \end{matrix} \right\}
+\begin{bmatrix} A_1 \\ \vdots \\ A_n \end{bmatrix} X = \mathbf{0}
+$$
+
+## Additional Considerations
+### Filtering
+
 
 ## Helpful Resources
+- [Computer Vision:
+Algorithms and Applications - Richard Szeliski](https://zhengyu.tech/upload/2023/08/Computer%20Vision%20Algorithms%20and%20Applications.pdf)
+    - Free, and widely available even if this link doesn't work. Covers a wide range of cv topics.
+
+- [Multiple View Geometry in Computer Vision - Richard Hartley and Andrew Zisserman](http://www.r-5.org/files/books/computers/algo-list/image-processing/vision/Richard_Hartley_Andrew_Zisserman-Multiple_View_Geometry_in_Computer_Vision-EN.pdf)
