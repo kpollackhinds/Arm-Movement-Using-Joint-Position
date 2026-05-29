@@ -33,11 +33,19 @@ def test_camera(index, show=False):
     if cap.isOpened():
         print(f"Camera found at index {index}")
         if show:
-            ret, frame = cap.read()
-            if ret:
-                cv2.imshow(f'Camera index {index} (any key to continue)', frame)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
+            print(f"  Streaming camera {index} — press any key to advance, ESC to quit")
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                cv2.imshow(f'Camera index {index} (any key for next, ESC to quit)', frame)
+                k = cv2.waitKey(1)
+                if k != -1:  # any key pressed
+                    cv2.destroyAllWindows()
+                    if k == 27:  # ESC — stop entirely
+                        cap.release()
+                        return True
+                    break  # any other key — advance to next camera
         cap.release()
         return True
     else:
@@ -67,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument('--list', action='store_true',
                         help='List all detected camera indices')
     parser.add_argument('--show', action='store_true',
-                        help='When listing cameras, show a preview frame for each detected camera')
+                        help='When listing cameras, stream live video for each detected camera (any key to advance, ESC to quit)')
     args = parser.parse_args()
 
     if args.list:
